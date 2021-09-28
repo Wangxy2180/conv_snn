@@ -43,13 +43,15 @@ def main():
     train_loader = DataLoader(DVSCifar10(train_filename),
                               batch_size=arg.batch_size,
                               shuffle=False)
-    
+
     test_loader = DataLoader(DVSCifar10(test_filename),
                              batch_size=arg.batch_size,
                              shuffle=False)
 
-
     # Model
+    # resume:概要,就是checkpoint
+    # arg.evaluate = True
+    # arg.resume=
     model = Spatial_CNN(nb_epochs=arg.epochs,
                         lr=arg.lr,
                         batch_size=arg.batch_size,
@@ -59,8 +61,8 @@ def main():
                         train_loader=train_loader,
                         test_loader=test_loader,
                         test_video=None
-    )
-    
+                        )
+
     # Training
     model.run()
 
@@ -82,12 +84,14 @@ class Spatial_CNN():
     def build_model(self):
         print('==> Build model and setup loss and optimizer')
         # build model
+        # model is spiking_resnet_18
         self.model = spiking_resnet_18(self.image_size, self.batch_size, nb_classes=10, channel=2).cuda()
         # Loss function and optimizer
         self.criterion = nn.CrossEntropyLoss().cuda()
         self.optimizer = torch.optim.SGD(self.model.parameters(), self.lr, momentum=0.9)
-    
+
     def resume_and_evaluate(self):
+        # default is empty str ""
         if self.resume:
             if os.path.isfile(self.resume):
                 print("==> loading checkpoint '{}'".format(self.resume))
@@ -98,7 +102,7 @@ class Spatial_CNN():
                 self.model.load_state_dict(checkpoint['state_dict'])
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
                 print("==> loaded checkpoint '{}' (epoch {}) (best_prec1 {})"
-                  .format(self.resume, checkpoint['epoch'], self.best_prec1))
+                      .format(self.resume, checkpoint['epoch'], self.best_prec1))
             else:
                 print("==> no checkpoint found at '{}'".format(self.resume))
         if self.evaluate:
@@ -109,6 +113,7 @@ class Spatial_CNN():
     def get_imagesize(self):
         progress = tqdm(self.train_loader)
         for i, (data0, label) in enumerate(progress):
+            # 4 10 2 128 128
             batch_size, window, ch, w, h = data0.size()
             self.image_size = np.array([w, h])
             self.batch_size = batch_size
@@ -117,12 +122,15 @@ class Spatial_CNN():
     def run(self):
         self.get_imagesize()
         self.build_model()
+        # 仅用作测试，训练时这个函数会被直接if掉
         self.resume_and_evaluate()
         cudnn.benchmark = True
-        
+
+        # 这里为啥是self.epoch?作者带脑子了吗？
         for self.epoch in range(self.start_epoch, self.nb_epochs):
             self.train_1epoch()
             if self.epoch % 10 == 9:
+                # 这个有问题啊
                 is_best = True
                 save_checkpoint({
                     'epoch': self.epoch,
@@ -131,14 +139,15 @@ class Spatial_CNN():
                 }, is_best, 'record/spatial/checkpoint.pth.tar', 'record/spatial/model_best.pth.tar')
             if self.epoch % 100 == 99:
                 prec1, val_loss = self.validate_1epoch()
+                # 作者脑子没病吧？这个也能跑出结果？best_prec1全程就没更新过
                 is_best = prec1 > self.best_prec1
                 # save model
                 save_checkpoint({
                     'epoch': self.epoch,
                     'state_dict': self.model.state_dict(),
                     'best_prec1': self.best_prec1,
-                    'optimizer' : self.optimizer.state_dict()
-                },is_best,'record/spatial/checkpoint.pth.tar','record/spatial/model_best.pth.tar')
+                    'optimizer': self.optimizer.state_dict()
+                }, is_best, 'record/spatial/checkpoint.pth.tar', 'record/spatial/model_best.pth.tar')
 
     def train_1epoch(self):
         print('==> Epoch:[{0}/{1}][training stage]'.format(self.epoch, self.nb_epochs))
@@ -148,13 +157,14 @@ class Spatial_CNN():
         top1 = AverageMeter()
         top5 = AverageMeter()
         # switch to train mode
-        self.model.train()    
+        self.model.train()
         end = time.time()
         # mini-batch training
         progress = tqdm(self.train_loader)
         for i, (data0, label) in enumerate(progress):
             # measure data loading time
             data_time.update(time.time() - end)
+            # data0:4*10*2*128*128，output fc_sumspike
             output = self.model(data0.cuda())
             loss = self.criterion(output, label.view((-1)).cuda())
             # --- show some event images
@@ -164,9 +174,9 @@ class Spatial_CNN():
             #     plt.imshow(data0[k, 0, 0, :, :].numpy())
             #     plt.title(label.numpy().transpose()[0, k])
             # plt.show()
-                # # for j in range(10):
-                # cv2.imshow("frame", )
-                # cv2.waitKey(100)
+            # # for j in range(10):
+            # cv2.imshow("frame", )
+            # cv2.waitKey(100)
             # print(label.numpy().transpose())
             # --- measure accuracy and record loss
             prec1, prec5 = accuracy(output.data, label.cuda(), topk=(1, 5))
@@ -185,16 +195,16 @@ class Spatial_CNN():
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-        
-        info = {'Epoch':[self.epoch],
-                'Batch Time':[round(batch_time.avg,3)],
-                'Data Time':[round(data_time.avg,3)],
-                'Loss':[round(losses.avg,5)],
-                'Prec@1':[round(top1.avg,4)],
-                'Prec@5':[round(top5.avg,4)],
+
+        info = {'Epoch': [self.epoch],
+                'Batch Time': [round(batch_time.avg, 3)],
+                'Data Time': [round(data_time.avg, 3)],
+                'Loss': [round(losses.avg, 5)],
+                'Prec@1': [round(top1.avg, 4)],
+                'Prec@5': [round(top5.avg, 4)],
                 'lr': self.optimizer.param_groups[0]['lr']
                 }
-        record_info(info, 'record/spatial/rgb_train.csv','train')
+        record_info(info, 'record/spatial/rgb_train.csv', 'train')
 
     def validate_1epoch(self):
         print('==> Epoch:[{0}/{1}][validation stage]'.format(self.epoch, self.nb_epochs))
@@ -203,7 +213,8 @@ class Spatial_CNN():
         top5 = AverageMeter()
         # switch to evaluate mode
         self.model.eval()
-        self.dic_video_level_preds={}
+        # 这玩意到底是干嘛用的，也没用上啊
+        self.dic_video_level_preds = {}
         end = time.time()
         progress = tqdm(self.test_loader)
         with torch.no_grad():
@@ -223,7 +234,7 @@ class Spatial_CNN():
                 'Prec@1': [round(top1.avg, 4)],
                 'Prec@5': [round(top5.avg, 4)],
                 }
-        record_info(info, 'record/spatial/rgb_test.csv','test')
+        record_info(info, 'record/spatial/rgb_test.csv', 'test')
         return True
 
 

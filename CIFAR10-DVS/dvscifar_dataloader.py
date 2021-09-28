@@ -11,24 +11,24 @@ from scipy.io import loadmat
 import sys
 import cv2
 
-
 train_filename = "DvsGesture/dvs_gestures_dense_train.pt"
 test_filename = "DvsGesture/dvs_gestures_dense_test.pt"
 
-mapping = { 0 :'airplane'  ,
-            1 :'automobile',
-            2 :'bird' ,
-            3 :'cat'   ,
-            4 :'deer'  ,
-            5 :'dog'    ,
-            6 :'frog'   ,
-            7 :'horse'       ,
-            8 :'ship'      ,
-            9 :'truck'     }
+mapping = {0: 'airplane',
+           1: 'automobile',
+           2: 'bird',
+           3: 'cat',
+           4: 'deer',
+           5: 'dog',
+           6: 'frog',
+           7: 'horse',
+           8: 'ship',
+           9: 'truck'}
 
 
 class DVSCifar10(Dataset):
     def __init__(self, root, train=True, transform=None, target_transform=None):
+        # 这里就是单纯的路径复制了一下
         self.root = os.path.expanduser(root)
         self.transform = transform
         self.target_transform = target_transform
@@ -41,11 +41,12 @@ class DVSCifar10(Dataset):
         Returns:
             tuple: (image, target) where target is index of the target class.
         """
+        # data is 10*2*128*128
         data, target = torch.load(self.root + '{}.pt'.format(index))
-
+        # 就是none
         if self.transform is not None:
             data = self.transform(data)
-
+        # 也是none
         if self.target_transform is not None:
             target = self.target_transform(target)
 
@@ -104,7 +105,7 @@ def create_npy():
             print("\r\tTrain data {:.2f}% complete\t\t".format(key / train_test_portion / 100), end='')
         frames, labels = events_to_frames(file_d, dt=5000)
         key += 1
-        torch.save([torch.Tensor(frames), torch.Tensor([labels,])],
+        torch.save([torch.Tensor(frames), torch.Tensor([labels, ])],
                    train_filename.format(key))
 
     print("\nprocessing testing data...")
@@ -117,6 +118,7 @@ def create_npy():
         torch.save([torch.Tensor(frames), torch.Tensor(labels)],
                    test_filename.format(key))
     print('\n')
+
 
 if __name__ == "__main__":
     create_npy()
